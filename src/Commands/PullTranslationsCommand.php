@@ -1,0 +1,220 @@
+<?php
+
+namespace Smartness\TranslationClient\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\File;
+use Smartness\TranslationClient\Exceptions\ApiException;
+use Smartness\TranslationClient\Exceptions\AuthenticationException;
+use Smartness\TranslationClient\TranslationClient;
+
+class PullTranslationsCommand extends Command
+{
+    /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'translations:pull
+                            {--language= : Pull translations for specific language only}
+                            {--format= : Override format (json|php|raw)}
+                            {--status= : Override status filter (approved|pending|rejected)}
+                            {--dry-run : Preview without saving files}
+                            {--test : Test API connection}';
+
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Pull translations from SmartPMS Translation Manager';
+
+    protected array $stats = [
+        'files' => 0,
+        'keys' => 0,
+    ];
+
+    /**
+     * Execute the console command.
+     */
+    public function handle(TranslationClient $client): int
+    {
+        // Test connection if requested
+        if ($this->option('test')) {
+            return $this->testConnection($client);
+        }
+
+        // Validate configuration
+        if (! config('translation-client.api_token')) {
+            $this->error('API token not configured. Please set SMARTPMS_TRANSLATION_TOKEN in your .env file.');
+
+            return 1;
+        }
+
+        $this->info('🔄 Pulling translations from SmartPMS...');
+        $this->newLine();
+
+        try {
+            // Fetch translations
+            $format = $this->option('format') ?: config('translation-client.format', 'php');
+            $language = $this->option('language');
+
+            $options = [
+                'format' => $format,
+                'status' => $this->option('status') ?: config('translation-client.status_filter'),
+            ];
+
+            if ($language) {
+                $options['language'] = $language;
+            }
+
+            $response = $client->fetch($options);
+
+            if (empty($response['data'])) {
+                $this->warn('No translations found.');
+
+                return 0;
+            }
+
+            // Determine output directory
+            $outputDir = config('translation-client.output_dir') ?: lang_path();
+
+            $this->line("📍 Output: {$outputDir}");
+            $this->line("📄 Format: {$format}");
+            $this->newLine();
+
+            // Save translations
+            $this->saveTranslations($response['data'], $format, $outputDir);
+
+            // Summary
+            $this->newLine();
+            $this->info('✅ Translations pulled successfully!');
+            $this->table(
+                ['Metric', 'Value'],
+                [
+                    ['Files created', $this->stats['files']],
+                    ['Translation keys', $response['meta']['total'] ?? $this->stats['keys']],
+                    ['Project', $response['meta']['project'] ?? 'N/A'],
+                ]
+            );
+
+            if ($this->option('dry-run')) {
+                $this->warn('This was a dry run. No files were saved.');
+            }
+
+            return 0;
+
+        } catch (AuthenticationException $e) {
+            $this->error('❌ Authentication failed: ' . $e->getMessage());
+
+            return 1;
+        } catch (ApiException $e) {
+            $this->error('❌ API error: ' . $e->getMessage());
+
+            return 1;
+        } catch (\Exception $e) {
+            $this->error('❌ Unexpected error: ' . $e->getMessage());
+
+            return 1;
+        }
+    }
+
+    /**
+     * Save translations to files
+     */
+    protected function saveTranslations(array $data, string $format, string $outputDir): void
+    {
+        foreach ($data as $language => $files) {
+            foreach ($files as $filename => $translations) {
+                $this->saveFile($language, $filename, $translations, $format, $outputDir);
+            }
+        }
+    }
+
+    /**
+     * Save a single translation file
+     */
+    protected function saveFile(
+        string $language,
+        string $filename,
+        array $translations,
+        string $format,
+        string $outputDir
+    ): void {
+        // Create language directory
+        $langDir = "{$outputDir}/{$language}";
+
+        if (! $this->option('dry-run')) {
+            File::ensureDirectoryExists($langDir);
+        }
+
+        // Determine file extension
+        $extension = match ($format) {
+            'php' => 'php',
+            'json' => 'json',
+            default => 'php',
+        };
+
+        $filePath = "{$langDir}/{$filename}.{$extension}";
+
+        // Generate file content
+        $content = match ($format) {
+            'php' => $this->generatePhpContent($translations),
+            'json' => json_encode($translations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n",
+            default => $this->generatePhpContent($translations),
+        };
+
+        // Save or preview
+        if ($this->option('dry-run')) {
+            $this->line("Would create: {$filePath}");
+        } else {
+            File::put($filePath, $content);
+            $this->info("✓ {$language}/{$filename}.{$extension}");
+        }
+
+        $this->stats['files']++;
+        $this->stats['keys'] += count($translations, COUNT_RECURSIVE) - count($translations);
+    }
+
+    /**
+     * Generate PHP file content
+     */
+    protected function generatePhpContent(array $data): string
+    {
+        return "<?php\n\nreturn " . var_export($data, true) . ";\n";
+    }
+
+    /**
+     * Test API connection
+     */
+    protected function testConnection(TranslationClient $client): int
+    {
+        $this->info('Testing connection to SmartPMS Translation API...');
+        $this->newLine();
+
+        try {
+            if ($client->testConnection()) {
+                $this->info('✅ Connection successful!');
+                $this->line('API URL: ' . config('translation-client.api_url'));
+                $this->line('Token configured: Yes');
+
+                return 0;
+            } else {
+                $this->error('❌ Connection failed');
+
+                return 1;
+            }
+        } catch (AuthenticationException $e) {
+            $this->error('❌ Authentication failed: ' . $e->getMessage());
+            $this->newLine();
+            $this->line('Please check your API token in .env:');
+            $this->line('SMARTPMS_TRANSLATION_TOKEN=your_token_here');
+
+            return 1;
+        } catch (ApiException $e) {
+            $this->error('❌ API error: ' . $e->getMessage());
+
+            return 1;
+        }
+    }
+}
