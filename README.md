@@ -3,17 +3,18 @@
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/smartness/translation-client.svg?style=flat-square)](https://packagist.org/packages/smartness/translation-client)
 [![Total Downloads](https://img.shields.io/packagist/dt/smartness/translation-client.svg?style=flat-square)](https://packagist.org/packages/smartness/translation-client)
 
-A Laravel package to synchronize translations from a centralized translation management system into your Laravel application.
+A Laravel package to synchronize translations between your Laravel application and a centralized translation management system. Pull translations from the server or push local translations back to keep everything in sync.
 
 ## Features
 
 - 🚀 **One Command Install** - Get started in seconds
-- 🔄 **Auto-sync** - Pull translations with a single command
+- 🔄 **Bi-directional Sync** - Pull and push translations with simple commands
 - 🌍 **Multi-language** - Support for all languages
 - 📦 **Laravel Compliant** - Generates proper Laravel translation files with nested arrays
 - ⚡ **CI/CD Ready** - Perfect for automated deployments
 - 🔒 **Secure** - API token authentication
 - 🎯 **Smart Filtering** - Filter by language, status, or specific files
+- ⬆️ **Push Support** - Send local translations back to the server
 
 ## Requirements
 
@@ -62,9 +63,9 @@ TRANSLATION_TIMEOUT=30   # HTTP timeout in seconds
 
 ## Usage
 
-### Basic Commands
+### Pulling Translations (Download)
 
-Pull all translations:
+Pull all translations from the server:
 
 ```bash
 php artisan translations:pull
@@ -88,7 +89,7 @@ Test API connection:
 php artisan translations:pull --test
 ```
 
-### Advanced Options
+#### Advanced Pull Options
 
 ```bash
 # Override format for this pull
@@ -99,6 +100,54 @@ php artisan translations:pull --status=approved
 
 # Combine multiple options
 php artisan translations:pull --language=de --status=approved --dry-run
+```
+
+### Pushing Translations (Upload)
+
+Push all local translations to the server:
+
+```bash
+php artisan translations:push
+```
+
+Push translations for a specific language:
+
+```bash
+php artisan translations:push --language=en
+```
+
+Push a specific translation file:
+
+```bash
+php artisan translations:push --language=en --file=messages
+```
+
+Preview without actually pushing:
+
+```bash
+php artisan translations:push --dry-run
+```
+
+Overwrite existing translations on the server:
+
+```bash
+php artisan translations:push --overwrite
+```
+
+Use a custom translation directory:
+
+```bash
+php artisan translations:push --dir=/path/to/translations
+```
+
+#### Advanced Push Options
+
+```bash
+# Combine multiple options
+php artisan translations:push --language=en --file=auth --overwrite
+
+# Preview what will be pushed
+php artisan translations:push --dry-run --language=de
 ```
 
 ## Output Structure
@@ -158,6 +207,7 @@ class TranslationSync
         protected TranslationClient $client
     ) {}
 
+    // Pull translations
     public function syncTranslations(string $language): array
     {
         // Fetch translations as Laravel PHP arrays
@@ -182,6 +232,27 @@ class TranslationSync
         return $response['data'];
     }
 
+    // Push translations
+    public function pushTranslations(array $translations, bool $overwrite = false): array
+    {
+        // Push all translations
+        return $this->client->push($translations, [
+            'overwrite' => $overwrite,
+        ]);
+    }
+
+    public function pushLanguageTranslations(string $language, array $translations, bool $overwrite = false): array
+    {
+        // Push translations for a specific language
+        return $this->client->pushLanguage($language, $translations, $overwrite);
+    }
+
+    public function pushFileTranslations(string $language, string $filename, array $translations): array
+    {
+        // Push a specific translation file
+        return $this->client->pushFile($language, $filename, $translations);
+    }
+
     public function verifyConnection(): bool
     {
         return $this->client->testConnection();
@@ -197,6 +268,9 @@ class TranslationSync
 | `fetchAsJson(?string $language)` | Fetch translations as flat JSON structure | `array` |
 | `fetchRaw(?string $language)` | Fetch raw format with full metadata | `array` |
 | `fetch(array $options)` | Fetch with custom options | `array` |
+| `push(array $translations, array $options)` | Push translations to the server | `array` |
+| `pushLanguage(string $language, array $translations, bool $overwrite)` | Push translations for a specific language | `array` |
+| `pushFile(string $language, string $filename, array $translations, bool $overwrite)` | Push a specific translation file | `array` |
 | `testConnection()` | Verify API connection and token | `bool` |
 
 ## CI/CD Integration

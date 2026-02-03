@@ -2,6 +2,4 @@
 
 namespace Smartness\TranslationClient\Exceptions;
 
-class ApiException extends \Exception
-{
-}
+class ApiException extends \Exception {}

@@ -4,6 +4,7 @@ namespace Smartness\TranslationClient;
 
 use Illuminate\Support\ServiceProvider;
 use Smartness\TranslationClient\Commands\PullTranslationsCommand;
+use Smartness\TranslationClient\Commands\PushTranslationsCommand;
 
 class TranslationClientServiceProvider extends ServiceProvider
 {
@@ -13,7 +14,7 @@ class TranslationClientServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(
-            __DIR__ . '/../config/translation-client.php',
+            __DIR__.'/../config/translation-client.php',
             'translation-client'
         );
 
@@ -33,12 +34,13 @@ class TranslationClientServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             // Publish configuration
             $this->publishes([
-                __DIR__ . '/../config/translation-client.php' => config_path('translation-client.php'),
+                __DIR__.'/../config/translation-client.php' => config_path('translation-client.php'),
             ], 'translation-client-config');
 
             // Register commands
             $this->commands([
                 PullTranslationsCommand::class,
+                PushTranslationsCommand::class,
             ]);
         }
     }
