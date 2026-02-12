@@ -86,7 +86,7 @@ class PullTranslationsCommand extends Command
             $this->newLine();
 
             // Save translations
-            $this->saveTranslations($translations, $format, $outputDir);
+            $this->saveTranslations($translations, $format, $outputDir, $language);
 
             // Summary
             $this->newLine();
@@ -95,8 +95,8 @@ class PullTranslationsCommand extends Command
                 ['Metric', 'Value'],
                 [
                     ['Files created', $this->stats['files']],
-                    ['Translation keys', $response['meta']['total'] ?? $this->stats['keys']],
-                    ['Project', $response['meta']['project'] ?? 'N/A'],
+                    ['Translation keys', $response['data']['total'] ?? $this->stats['keys']],
+                    ['Languages', implode(', ', $response['data']['meta']['languages'] ?? [])],
                 ]
             );
 
@@ -122,11 +122,44 @@ class PullTranslationsCommand extends Command
     }
 
     /**
+     * Pivot API data from filename -> key -> language -> value
+     * to language -> filename -> key -> value
+     *
+     * @return array<string, array<string, array<string, string>>>
+     */
+    protected function pivotByLanguage(array $data, ?string $languageFilter = null): array
+    {
+        $pivoted = [];
+
+        foreach ($data as $filename => $keys) {
+            $filename = str_replace('.php', '', $filename);
+
+            foreach ($keys as $key => $languages) {
+                if (! is_array($languages)) {
+                    continue;
+                }
+
+                foreach ($languages as $language => $value) {
+                    if ($languageFilter && $language !== $languageFilter) {
+                        continue;
+                    }
+
+                    $pivoted[$language][$filename][$key] = $value;
+                }
+            }
+        }
+
+        return $pivoted;
+    }
+
+    /**
      * Save translations to files
      */
-    protected function saveTranslations(array $data, string $format, string $outputDir): void
+    protected function saveTranslations(array $data, string $format, string $outputDir, ?string $languageFilter = null): void
     {
-        foreach ($data as $language => $files) {
+        $byLanguage = $this->pivotByLanguage($data, $languageFilter);
+
+        foreach ($byLanguage as $language => $files) {
             foreach ($files as $filename => $translations) {
                 $this->saveFile($language, $filename, $translations, $format, $outputDir);
             }
