@@ -70,7 +70,9 @@ class PullTranslationsCommand extends Command
 
             $response = $client->fetch($options);
 
-            if (empty($response['data'])) {
+            $translations = $response['data']['translations'] ?? [];
+
+            if (empty($translations)) {
                 $this->warn('No translations found.');
 
                 return 0;
@@ -84,7 +86,7 @@ class PullTranslationsCommand extends Command
             $this->newLine();
 
             // Save translations
-            $this->saveTranslations($response['data'], $format, $outputDir);
+            $this->saveTranslations($translations, $format, $outputDir);
 
             // Summary
             $this->newLine();
