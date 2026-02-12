@@ -140,6 +140,10 @@ class PullTranslationsCommand extends Command
                 }
 
                 foreach ($languages as $language => $value) {
+                    if ($value === null) {
+                        continue;
+                    }
+
                     if ($languageFilter && $language !== $languageFilter) {
                         continue;
                     }
