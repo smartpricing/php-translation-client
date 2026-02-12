@@ -212,11 +212,53 @@ class PullTranslationsCommand extends Command
     }
 
     /**
-     * Generate PHP file content
+     * Expand dot-notation keys into nested arrays
+     */
+    protected function undot(array $data): array
+    {
+        $result = [];
+
+        foreach ($data as $key => $value) {
+            data_set($result, $key, $value);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Generate PHP file content with short array syntax
      */
     protected function generatePhpContent(array $data): string
     {
-        return "<?php\n\nreturn " . var_export($data, true) . ";\n";
+        $data = $this->undot($data);
+
+        return "<?php\n\nreturn " . $this->exportArray($data) . ";\n";
+    }
+
+    /**
+     * Export array using short [] syntax
+     */
+    protected function exportArray(array $array, int $indent = 1): string
+    {
+        if (empty($array)) {
+            return '[]';
+        }
+
+        $spaces = str_repeat('    ', $indent);
+        $closingSpaces = str_repeat('    ', $indent - 1);
+        $lines = [];
+
+        foreach ($array as $key => $value) {
+            $exportedKey = var_export($key, true);
+
+            if (is_array($value)) {
+                $lines[] = "{$spaces}{$exportedKey} => " . $this->exportArray($value, $indent + 1) . ',';
+            } else {
+                $lines[] = "{$spaces}{$exportedKey} => " . var_export($value, true) . ',';
+            }
+        }
+
+        return "[\n" . implode("\n", $lines) . "\n{$closingSpaces}]";
     }
 
     /**
