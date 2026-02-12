@@ -43,7 +43,7 @@ class PushTranslationsCommand extends Command
     {
         // Validate configuration
         if (! config('translation-client.api_token')) {
-            $this->error('API token not configured. Please set SMARTPMS_TRANSLATION_TOKEN in your .env file.');
+            $this->error('API token not configured. Please set TRANSLATION_API_TOKEN in your .env file.');
 
             return 1;
         }
@@ -99,15 +99,15 @@ class PushTranslationsCommand extends Command
             return 0;
 
         } catch (AuthenticationException $e) {
-            $this->error('❌ Authentication failed: '.$e->getMessage());
+            $this->error('❌ Authentication failed: ' . $e->getMessage());
 
             return 1;
         } catch (ApiException $e) {
-            $this->error('❌ API error: '.$e->getMessage());
+            $this->error('❌ API error: ' . $e->getMessage());
 
             return 1;
         } catch (\Exception $e) {
-            $this->error('❌ Unexpected error: '.$e->getMessage());
+            $this->error('❌ Unexpected error: ' . $e->getMessage());
 
             return 1;
         }

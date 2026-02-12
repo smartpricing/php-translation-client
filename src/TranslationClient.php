@@ -47,7 +47,7 @@ class TranslationClient
                 ->get("{$this->apiUrl}/translation-projects/export", $options);
 
             if ($response->status() === 401) {
-                throw new AuthenticationException('Invalid API token. Please check your SMARTPMS_TRANSLATION_TOKEN configuration.');
+                throw new AuthenticationException('Invalid API token. Please check your TRANSLATION_API_TOKEN configuration.');
             }
 
             if ($response->failed()) {
@@ -133,7 +133,7 @@ class TranslationClient
                 ->post("{$this->apiUrl}/translation-projects/import", $payload);
 
             if ($response->status() === 401) {
-                throw new AuthenticationException('Invalid API token. Please check your SMARTPMS_TRANSLATION_TOKEN configuration.');
+                throw new AuthenticationException('Invalid API token. Please check your TRANSLATION_API_TOKEN configuration.');
             }
 
             if ($response->failed()) {

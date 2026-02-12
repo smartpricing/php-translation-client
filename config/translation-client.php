@@ -23,7 +23,7 @@ return [
     |
     */
 
-    'api_token' => env('SMARTPMS_TRANSLATION_TOKEN'),
+    'api_token' => env('TRANSLATION_API_TOKEN'),
 
     /*
     |--------------------------------------------------------------------------

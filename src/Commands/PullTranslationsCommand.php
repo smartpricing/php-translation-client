@@ -46,7 +46,7 @@ class PullTranslationsCommand extends Command
 
         // Validate configuration
         if (! config('translation-client.api_token')) {
-            $this->error('API token not configured. Please set SMARTPMS_TRANSLATION_TOKEN in your .env file.');
+            $this->error('API token not configured. Please set TRANSLATION_API_TOKEN in your .env file.');
 
             return 1;
         }
@@ -105,15 +105,15 @@ class PullTranslationsCommand extends Command
             return 0;
 
         } catch (AuthenticationException $e) {
-            $this->error('❌ Authentication failed: '.$e->getMessage());
+            $this->error('❌ Authentication failed: ' . $e->getMessage());
 
             return 1;
         } catch (ApiException $e) {
-            $this->error('❌ API error: '.$e->getMessage());
+            $this->error('❌ API error: ' . $e->getMessage());
 
             return 1;
         } catch (\Exception $e) {
-            $this->error('❌ Unexpected error: '.$e->getMessage());
+            $this->error('❌ Unexpected error: ' . $e->getMessage());
 
             return 1;
         }
@@ -160,7 +160,7 @@ class PullTranslationsCommand extends Command
         // Generate file content
         $content = match ($format) {
             'php' => $this->generatePhpContent($translations),
-            'json' => json_encode($translations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)."\n",
+            'json' => json_encode($translations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n",
             default => $this->generatePhpContent($translations),
         };
 
@@ -181,7 +181,7 @@ class PullTranslationsCommand extends Command
      */
     protected function generatePhpContent(array $data): string
     {
-        return "<?php\n\nreturn ".var_export($data, true).";\n";
+        return "<?php\n\nreturn " . var_export($data, true) . ";\n";
     }
 
     /**
@@ -195,7 +195,7 @@ class PullTranslationsCommand extends Command
         try {
             if ($client->testConnection()) {
                 $this->info('✅ Connection successful!');
-                $this->line('API URL: '.config('translation-client.api_url'));
+                $this->line('API URL: ' . config('translation-client.api_url'));
                 $this->line('Token configured: Yes');
 
                 return 0;
@@ -205,14 +205,14 @@ class PullTranslationsCommand extends Command
                 return 1;
             }
         } catch (AuthenticationException $e) {
-            $this->error('❌ Authentication failed: '.$e->getMessage());
+            $this->error('❌ Authentication failed: ' . $e->getMessage());
             $this->newLine();
             $this->line('Please check your API token in .env:');
-            $this->line('SMARTPMS_TRANSLATION_TOKEN=your_token_here');
+            $this->line('TRANSLATION_API_TOKEN=your_token_here');
 
             return 1;
         } catch (ApiException $e) {
-            $this->error('❌ API error: '.$e->getMessage());
+            $this->error('❌ API error: ' . $e->getMessage());
 
             return 1;
         }
