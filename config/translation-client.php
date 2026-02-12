@@ -11,7 +11,7 @@ return [
     |
     */
 
-    'api_url' => env('SMARTPMS_TRANSLATION_API_URL', 'https://pms-intool.smartness.com/api'),
+    'api_url' => env('TRANSLATION_API_URL', 'http://pms-intool.smartness.com/api'),
 
     /*
     |--------------------------------------------------------------------------

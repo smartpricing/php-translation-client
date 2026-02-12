@@ -44,7 +44,7 @@ class TranslationClient
         try {
             $response = Http::withToken($this->apiToken)
                 ->timeout($this->timeout)
-                ->get("{$this->apiUrl}/translation-projects/export", $options);
+                ->get("{$this->apiUrl}/translation-projects/translations", $options);
 
             if ($response->status() === 401) {
                 throw new AuthenticationException('Invalid API token. Please check your TRANSLATION_API_TOKEN configuration.');
@@ -130,7 +130,7 @@ class TranslationClient
 
             $response = Http::withToken($this->apiToken)
                 ->timeout($this->timeout)
-                ->post("{$this->apiUrl}/translation-projects/import", $payload);
+                ->post("{$this->apiUrl}/translation-projects/translations", $payload);
 
             if ($response->status() === 401) {
                 throw new AuthenticationException('Invalid API token. Please check your TRANSLATION_API_TOKEN configuration.');
