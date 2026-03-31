@@ -8,9 +8,6 @@ use Smartness\TranslationClient\Commands\PushTranslationsCommand;
 
 class TranslationClientServiceProvider extends ServiceProvider
 {
-    /**
-     * Register services.
-     */
     public function register(): void
     {
         $this->mergeConfigFrom(
@@ -26,9 +23,6 @@ class TranslationClientServiceProvider extends ServiceProvider
         });
     }
 
-    /**
-     * Bootstrap services.
-     */
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {

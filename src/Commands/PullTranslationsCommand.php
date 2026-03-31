@@ -3,6 +3,7 @@
 namespace Smartness\TranslationClient\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use Smartness\TranslationClient\Exceptions\ApiException;
 use Smartness\TranslationClient\Exceptions\AuthenticationException;
@@ -10,11 +11,6 @@ use Smartness\TranslationClient\TranslationClient;
 
 class PullTranslationsCommand extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'translations:pull
                             {--language= : Pull translations for specific language only}
                             {--format= : Override format (json|php|raw)}
@@ -22,11 +18,6 @@ class PullTranslationsCommand extends Command
                             {--dry-run : Preview without saving files}
                             {--test : Test API connection}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Pull translations from SmartPMS Translation Manager';
 
     protected array $stats = [
@@ -165,14 +156,17 @@ class PullTranslationsCommand extends Command
 
         foreach ($byLanguage as $language => $files) {
             foreach ($files as $filename => $translations) {
+                if ($filename === '') {
+                    $this->warn("Skipping translations with no filename for language: {$language}");
+
+                    continue;
+                }
+
                 $this->saveFile($language, $filename, $translations, $format, $outputDir);
             }
         }
     }
 
-    /**
-     * Save a single translation file
-     */
     protected function saveFile(
         string $language,
         string $filename,
@@ -180,33 +174,18 @@ class PullTranslationsCommand extends Command
         string $format,
         string $outputDir
     ): void {
-        // Create language directory
         $langDir = "{$outputDir}/{$language}";
-
-        if (! $this->option('dry-run')) {
-            File::ensureDirectoryExists($langDir);
-        }
-
-        // Determine file extension
-        $extension = match ($format) {
-            'php' => 'php',
-            'json' => 'json',
-            default => 'php',
-        };
-
+        $isJson = $format === 'json';
+        $extension = $isJson ? 'json' : 'php';
         $filePath = "{$langDir}/{$filename}.{$extension}";
 
-        // Generate file content
-        $content = match ($format) {
-            'php' => $this->generatePhpContent($translations),
-            'json' => json_encode($translations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n",
-            default => $this->generatePhpContent($translations),
-        };
-
-        // Save or preview
         if ($this->option('dry-run')) {
             $this->line("Would create: {$filePath}");
         } else {
+            File::ensureDirectoryExists($langDir);
+            $content = $isJson
+                ? json_encode($translations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n"
+                : $this->generatePhpContent($translations);
             File::put($filePath, $content);
             $this->info("✓ {$language}/{$filename}.{$extension}");
         }
@@ -215,26 +194,9 @@ class PullTranslationsCommand extends Command
         $this->stats['keys'] += count($translations, COUNT_RECURSIVE) - count($translations);
     }
 
-    /**
-     * Expand dot-notation keys into nested arrays
-     */
-    protected function undot(array $data): array
-    {
-        $result = [];
-
-        foreach ($data as $key => $value) {
-            data_set($result, $key, $value);
-        }
-
-        return $result;
-    }
-
-    /**
-     * Generate PHP file content with short array syntax
-     */
     protected function generatePhpContent(array $data): string
     {
-        $data = $this->undot($data);
+        $data = Arr::undot($data);
 
         return "<?php\n\nreturn " . $this->exportArray($data) . ";\n";
     }

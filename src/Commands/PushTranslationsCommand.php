@@ -10,11 +10,6 @@ use Smartness\TranslationClient\TranslationClient;
 
 class PushTranslationsCommand extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'translations:push
                             {--language= : Push translations for specific language only}
                             {--file= : Push specific translation file only}
@@ -22,16 +17,10 @@ class PushTranslationsCommand extends Command
                             {--overwrite : Overwrite existing translations on the server}
                             {--dry-run : Preview without actually pushing}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Push local translations to SmartPMS Translation Manager';
 
     protected array $stats = [
         'files' => 0,
-        'keys' => 0,
         'created' => 0,
         'updated' => 0,
     ];
@@ -84,7 +73,7 @@ class PushTranslationsCommand extends Command
 
             // Push translations
             if (! $this->option('dry-run')) {
-                $response = $client->push($translations, [
+                $response = $client->push($this->pivotForApi($translations), [
                     'overwrite' => $this->option('overwrite'),
                 ]);
 
@@ -157,7 +146,6 @@ class PushTranslationsCommand extends Command
                 if (! empty($content)) {
                     $translations[$language][$filename] = $content;
                     $this->stats['files']++;
-                    $this->stats['keys'] += $this->countKeys($content);
                 }
             }
 
@@ -168,6 +156,25 @@ class PushTranslationsCommand extends Command
         }
 
         return $translations;
+    }
+
+    /**
+     * Pivot local structure (language → filename → key → value)
+     * into the API's expected structure (filename → key → language → value)
+     */
+    protected function pivotForApi(array $translations): array
+    {
+        $pivoted = [];
+
+        foreach ($translations as $language => $files) {
+            foreach ($files as $filename => $keys) {
+                foreach ($keys as $key => $value) {
+                    $pivoted[$filename][$key][$language] = $value;
+                }
+            }
+        }
+
+        return $pivoted;
     }
 
     /**
@@ -210,30 +217,23 @@ class PushTranslationsCommand extends Command
         return $count;
     }
 
-    /**
-     * Display summary of translations to be pushed
-     */
     protected function displaySummary(array $translations): void
     {
         $rows = [];
+        $totalKeys = 0;
 
         foreach ($translations as $language => $files) {
             foreach ($files as $filename => $content) {
-                $rows[] = [
-                    $language,
-                    $filename,
-                    $this->countKeys($content),
-                ];
+                $count = $this->countKeys($content);
+                $rows[] = [$language, $filename, $count];
+                $totalKeys += $count;
             }
         }
 
-        $this->table(
-            ['Language', 'File', 'Keys'],
-            $rows
-        );
+        $this->table(['Language', 'File', 'Keys'], $rows);
 
         $this->newLine();
-        $this->line("Total: {$this->stats['files']} files, {$this->stats['keys']} keys");
+        $this->line("Total: {$this->stats['files']} files, {$totalKeys} keys");
         $this->newLine();
     }
 
