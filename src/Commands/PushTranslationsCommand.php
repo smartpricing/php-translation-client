@@ -186,7 +186,9 @@ class PushTranslationsCommand extends Command
         foreach ($translations as $language => $files) {
             foreach ($files as $filename => $keys) {
                 foreach (Arr::dot($keys) as $key => $value) {
-                    $pivoted[$filename][$key][$language] = $value;
+                    if (is_string($value) || is_null($value)) {
+                        $pivoted[$filename][$key][$language] = $value;
+                    }
                 }
             }
         }

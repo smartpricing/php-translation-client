@@ -30,6 +30,7 @@ class TranslationClient
     {
         try {
             $response = Http::withToken($this->apiToken)
+                ->acceptJson()
                 ->timeout($this->timeout)
                 ->get("{$this->apiUrl}/translation-projects/translations", $options);
 
@@ -86,6 +87,7 @@ class TranslationClient
     {
         try {
             $response = Http::withToken($this->apiToken)
+                ->acceptJson()
                 ->timeout($this->timeout)
                 ->post("{$this->apiUrl}/translation-projects/translations", array_merge($options, [
                     'translations' => $translations,
