@@ -84,6 +84,7 @@ class PushTranslationsCommand extends Command
 
                     $response = $client->push([$filename => $pivoted[$filename]], [
                         'overwrite' => $this->option('overwrite'),
+                        'status' => config('translation-client.push_status', 'reviewed'),
                     ]);
 
                     if (isset($response['data']['summary'])) {
