@@ -3,6 +3,7 @@
 namespace Smartness\TranslationClient\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use Smartness\TranslationClient\Exceptions\ApiException;
 use Smartness\TranslationClient\Exceptions\AuthenticationException;
@@ -71,13 +72,29 @@ class PushTranslationsCommand extends Command
                 return 0;
             }
 
-            // Push translations
+            // Push translations chunked by file
             if (! $this->option('dry-run')) {
-                $response = $client->push($this->pivotForApi($translations), [
-                    'overwrite' => $this->option('overwrite'),
-                ]);
+                $pivoted = $this->pivotForApi($translations);
+                $filenames = array_keys($pivoted);
+                $totalFiles = count($filenames);
+                $aggregated = ['created' => 0, 'updated' => 0, 'skipped' => 0, 'total' => 0];
 
-                $this->displayResults($response);
+                foreach ($filenames as $index => $filename) {
+                    $this->line(sprintf('  [%d/%d] Pushing %s...', $index + 1, $totalFiles, $filename));
+
+                    $response = $client->push([$filename => $pivoted[$filename]], [
+                        'overwrite' => $this->option('overwrite'),
+                    ]);
+
+                    if (isset($response['data']['summary'])) {
+                        foreach ($aggregated as $metric => &$value) {
+                            $value += $response['data']['summary'][$metric] ?? 0;
+                        }
+                        unset($value);
+                    }
+                }
+
+                $this->displayResults(['data' => ['summary' => $aggregated]]);
             } else {
                 $this->warn('This was a dry run. No translations were pushed.');
             }
@@ -168,7 +185,7 @@ class PushTranslationsCommand extends Command
 
         foreach ($translations as $language => $files) {
             foreach ($files as $filename => $keys) {
-                foreach ($keys as $key => $value) {
+                foreach (Arr::dot($keys) as $key => $value) {
                     $pivoted[$filename][$key][$language] = $value;
                 }
             }
