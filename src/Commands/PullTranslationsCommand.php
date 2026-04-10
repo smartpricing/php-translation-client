@@ -203,132 +203,57 @@ class PullTranslationsCommand extends Command
     /**
      * Merge server translations into an existing PHP file,
      * preserving comments, constants, and key ordering.
+     *
+     * Iterates the resolved local array in order so that replacements
+     * follow the same sequence as lines in the file, preventing
+     * mismatches when multiple keys share the same value.
      */
     protected function mergePhpFile(string $filePath, array $serverTranslations): string
     {
         $rawContent = File::get($filePath);
 
-        // Include the file to get resolved values (constants, expressions, etc.)
         $resolved = include $filePath;
         if (! is_array($resolved)) {
             return $this->generatePhpContent($serverTranslations);
         }
 
-        $currentFlat = Arr::dot($resolved);
-        $serverFlat = $serverTranslations; // Already dotted keys from the API
+        $existingDotted = Arr::dot($resolved);
 
-        // Separate changed values and new keys
-        $changed = [];
-        $newKeys = [];
-
-        foreach ($serverFlat as $dottedKey => $serverValue) {
-            if (array_key_exists($dottedKey, $currentFlat)) {
-                if ((string) $currentFlat[$dottedKey] !== (string) $serverValue) {
-                    $changed[$dottedKey] = [
-                        'old' => $currentFlat[$dottedKey],
-                        'new' => $serverValue,
-                    ];
-                }
-            } else {
-                $newKeys[$dottedKey] = $serverValue;
+        // Update changed values in raw content — iterate local keys in order
+        foreach ($existingDotted as $dottedKey => $oldValue) {
+            if (! isset($serverTranslations[$dottedKey])) {
+                continue; // Key not on server, leave untouched
             }
+
+            $newValue = $serverTranslations[$dottedKey];
+            if ($oldValue === $newValue) {
+                continue;
+            }
+
+            $escapedOld = preg_quote(var_export($oldValue, true), '/');
+            $pattern = '/(=>\s*)' . $escapedOld . '/';
+            $replacement = '${1}' . var_export($newValue, true);
+            $rawContent = preg_replace($pattern, $replacement, $rawContent, 1);
         }
 
-        // Replace changed values in the raw content line-by-line
-        if (! empty($changed)) {
-            $rawContent = $this->replaceValuesInSource($rawContent, $changed);
-        }
-
-        // Append new keys before the final ];
+        // Append new keys not in local file
+        $newKeys = array_diff_key($serverTranslations, $existingDotted);
         if (! empty($newKeys)) {
-            $rawContent = $this->appendKeysToSource($rawContent, $newKeys);
+            $additions = [];
+            foreach ($newKeys as $key => $value) {
+                $exportedKey = var_export($key, true);
+                $exportedValue = var_export($value, true);
+                $additions[] = "    {$exportedKey} => {$exportedValue},";
+            }
+
+            $rawContent = preg_replace(
+                '/(\n\];)\s*$/',
+                "\n" . implode("\n", $additions) . '$1',
+                $rawContent
+            );
         }
 
         return $rawContent;
-    }
-
-    /**
-     * Replace old values with new values in the raw PHP source.
-     * Handles duplicate values by processing line-by-line and tracking handled keys.
-     */
-    protected function replaceValuesInSource(string $content, array $changed): string
-    {
-        $lines = explode("\n", $content);
-        $handled = [];
-
-        foreach ($lines as $index => $line) {
-            foreach ($changed as $dottedKey => $values) {
-                if (isset($handled[$dottedKey])) {
-                    continue;
-                }
-
-                $oldValue = $values['old'];
-                $newValue = $values['new'];
-
-                // Get the last segment of the dotted key to match in the source
-                $segments = explode('.', $dottedKey);
-                $lastKey = end($segments);
-                $quotedKey = preg_quote(var_export($lastKey, true), '/');
-
-                // Escape old value for regex
-                $escapedOld = preg_quote(var_export((string) $oldValue, true), '/');
-
-                // Match: 'key' => 'old_value' or "key" => "old_value"
-                $pattern = '/(' . $quotedKey . '\s*=>\s*)' . $escapedOld . '/';
-
-                if (preg_match($pattern, $line)) {
-                    $lines[$index] = preg_replace(
-                        $pattern,
-                        '${1}' . var_export((string) $newValue, true),
-                        $line,
-                        1
-                    );
-                    $handled[$dottedKey] = true;
-
-                    break;
-                }
-            }
-        }
-
-        return implode("\n", $lines);
-    }
-
-    /**
-     * Append new keys before the final `];` in the PHP source.
-     */
-    protected function appendKeysToSource(string $content, array $newKeys): string
-    {
-        $nested = Arr::undot($newKeys);
-        $exported = $this->exportArrayEntries($nested, 1);
-
-        // Insert before the last ];
-        $pos = strrpos($content, '];');
-        if ($pos === false) {
-            return $content;
-        }
-
-        return substr($content, 0, $pos) . $exported . "\n" . '];' . substr($content, $pos + 2);
-    }
-
-    /**
-     * Export array entries as PHP source lines (without wrapping [] brackets).
-     */
-    protected function exportArrayEntries(array $array, int $indent): string
-    {
-        $spaces = str_repeat('    ', $indent);
-        $lines = [];
-
-        foreach ($array as $key => $value) {
-            $exportedKey = var_export($key, true);
-
-            if (is_array($value)) {
-                $lines[] = "{$spaces}{$exportedKey} => " . $this->exportArray($value, $indent + 1) . ',';
-            } else {
-                $lines[] = "{$spaces}{$exportedKey} => " . var_export($value, true) . ',';
-            }
-        }
-
-        return implode("\n", $lines);
     }
 
     protected function generatePhpContent(array $data): string
