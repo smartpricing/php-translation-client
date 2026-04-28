@@ -106,8 +106,9 @@ class TranslationClient
         }
 
         if ($response->failed()) {
+            $body = substr((string) $response->body(), 0, 500);
             throw new ApiException(
-                "API request failed with status {$response->status()}: {$response->body()}"
+                "API request failed with status {$response->status()}: {$body}"
             );
         }
 
