@@ -3,6 +3,8 @@
 namespace Smartness\TranslationClient;
 
 use Illuminate\Support\ServiceProvider;
+use Smartness\TranslationClient\Commands\CleanupTranslationsCommand;
+use Smartness\TranslationClient\Commands\MissingTranslationsCommand;
 use Smartness\TranslationClient\Commands\PullTranslationsCommand;
 use Smartness\TranslationClient\Commands\PushTranslationsCommand;
 
@@ -35,6 +37,8 @@ class TranslationClientServiceProvider extends ServiceProvider
             $this->commands([
                 PullTranslationsCommand::class,
                 PushTranslationsCommand::class,
+                CleanupTranslationsCommand::class,
+                MissingTranslationsCommand::class,
             ]);
         }
     }

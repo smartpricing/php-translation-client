@@ -15,11 +15,13 @@ A Laravel package to synchronize translations between your Laravel application a
 - 🔒 **Secure** - API token authentication
 - 🎯 **Smart Filtering** - Filter by language, status, or specific files
 - ⬆️ **Push Support** - Send local translations back to the server
+- 🔎 **Source-Code Sync** - `translations:missing` and `translations:cleanup` reconcile the catalog with the actual `$t()` / `trans()` / `__()` / `@lang` usage in your code
+- 🏠 **Centralized Scan Config** - Scan settings live on the project so every developer uses the same patterns (local `.env` still wins)
 
 ## Requirements
 
 - PHP 8.1 or higher
-- Laravel 10, 11, or 12
+- Laravel 10, 11, 12, or 13
 
 ## Installation
 
@@ -57,6 +59,14 @@ TRANSLATION_OUTPUT_DIR=  # Default: lang_path()
 TRANSLATION_FORMAT=php   # Options: php, json, raw
 TRANSLATION_STATUS=approved  # Filter: approved, pending, rejected
 TRANSLATION_TIMEOUT=30   # HTTP timeout in seconds
+
+# Optional: Source-scanning overrides (used by translations:cleanup and translations:missing).
+# These are fetched from the server's project config by default, so most teams
+# don't need to set them. Local values always override the server config.
+SMARTPMS_TRANSLATION_SCAN_DIRS="resources,app"
+SMARTPMS_TRANSLATION_SCAN_EXTENSIONS="php,blade.php,ts,tsx,js,jsx,vue"
+SMARTPMS_TRANSLATION_KEY_PATTERN=
+SMARTPMS_TRANSLATION_PREFIX_PATTERN=
 ```
 
 **Note:** You'll receive your API token and endpoint URL from your translation service administrator.
@@ -149,6 +159,54 @@ php artisan translations:push --language=en --file=auth --overwrite
 # Preview what will be pushed
 php artisan translations:push --dry-run --language=de
 ```
+
+### Reconciling the Catalog with Source Code
+
+These two commands scan your local source for `$t('…')`, `useTranslate('…')`, `i18n.t('…')`, `trans('…')`, `__('…')` and `@lang('…')` calls and reconcile what they find with what the server stores.
+
+Both commands first fetch the project's central scan configuration from `GET /translation-projects/config`. Local config (`config/translation-client.php` or `SMARTPMS_TRANSLATION_*` env vars) always wins; the server values are a shared default; package defaults are used if neither is set. The resolved config is printed at the start of each run so you can verify which source provided each value.
+
+#### `translations:missing` — Find Keys Used in Code but Absent Remotely
+
+```bash
+# Dry-run: report keys referenced in source that don't exist on the server.
+php artisan translations:missing
+
+# Create those keys as placeholder rows on the project's primary language
+# (value=null, missing=true, is_new=true), so they show up in the New Keys UI.
+php artisan translations:missing --insert
+```
+
+Sample output:
+
+```
+Scan configuration:
+  scan_dirs        (server ) resources, app
+  scan_extensions  (server ) php, blade.php, ts, tsx, vue
+  key_pattern      (default) (?:^|[^\w$])(?:\$?t|useTranslat(?:e|ion)|i18n…
+  prefix_pattern   (default) (?:^|[^\w$])(?:\$?t|useTranslat(?:e|ion)|i18n…
+
+Scanned 412 files.
+Found 837 unique used key(s).
+Remote keys: 540
+Used keys sent: 837
+Missing keys: 12
+  - dashboard.banner.welcome
+  - dashboard.banner.dismiss
+  …
+```
+
+#### `translations:cleanup` — Find Keys Stored Remotely but Unused in Code
+
+```bash
+# Dry-run: report stale keys.
+php artisan translations:cleanup
+
+# Actually delete them from the remote project.
+php artisan translations:cleanup --delete
+```
+
+Dynamic keys built with template literals (e.g. `` $t(`amenities.${name}`) ``) contribute a static prefix that protects every matching remote key from deletion — no false positives when the key set is computed at runtime.
 
 ## Output Structure
 
@@ -271,6 +329,9 @@ class TranslationSync
 | `push(array $translations, array $options)` | Push translations to the server | `array` |
 | `pushLanguage(string $language, array $translations, bool $overwrite)` | Push translations for a specific language | `array` |
 | `pushFile(string $language, string $filename, array $translations, bool $overwrite)` | Push a specific translation file | `array` |
+| `fetchProjectConfig()` | Fetch the centralized scan config from the server. Returns `null` on failure so callers can fall back to local config. | `?array` |
+| `cleanup(array $usedKeys, array $usedPrefixes, bool $delete)` | Report (and optionally delete) remote keys not referenced in source. | `array` |
+| `discoverMissing(array $usedKeys, array $usedPrefixes, bool $insert)` | Report (and optionally insert) keys referenced in source but missing remotely. | `array` |
 | `testConnection()` | Verify API connection and token | `bool` |
 
 ## CI/CD Integration

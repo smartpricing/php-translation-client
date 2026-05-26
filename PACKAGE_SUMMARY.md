@@ -87,6 +87,9 @@ git push origin v1.0.0
 - ✅ CI/CD ready
 - ✅ Dry-run mode for testing
 - ✅ Connection testing
+- ✅ `translations:missing` — find keys used in code but absent remotely
+- ✅ `translations:cleanup` — find/delete remote keys no longer referenced in code
+- ✅ Centralized scan config (server-side) with local `.env` overrides
 
 ### For Developers:
 - ✅ Clean, documented code
@@ -116,6 +119,12 @@ php artisan translations:pull --dry-run
 
 # Override format
 php artisan translations:pull --format=json
+
+# Reconcile the catalog with your source code
+php artisan translations:missing            # report keys used in code but missing remotely
+php artisan translations:missing --insert   # create them as new keys
+php artisan translations:cleanup            # report stale keys
+php artisan translations:cleanup --delete   # delete them
 ```
 
 ### Programmatic Usage

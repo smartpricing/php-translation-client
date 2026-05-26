@@ -148,6 +148,91 @@ class TranslationClient
     }
 
     /**
+     * Fetch the project's central scan configuration. Returns null on failure
+     * so callers can fall back to local config / defaults.
+     *
+     * @return array{scan_dirs:?array<string>, scan_extensions:?array<string>, scan_key_pattern:?string, scan_prefix_pattern:?string}|null
+     */
+    public function fetchProjectConfig(): ?array
+    {
+        try {
+            $response = Http::withToken($this->apiToken)
+                ->acceptJson()
+                ->timeout($this->timeout)
+                ->get("{$this->apiUrl}/translation-projects/config");
+
+            if ($response->status() === 404) {
+                // Older server without the /config endpoint.
+                return null;
+            }
+
+            $data = $this->parseResponse($response);
+
+            return $data['data'] ?? null;
+        } catch (ConnectionException $e) {
+            return null;
+        } catch (ApiException $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Report (and optionally delete) translation keys not present in the
+     * caller's `used_keys` list.
+     *
+     * @param  string[]  $usedKeys
+     * @param  string[]  $usedPrefixes
+     *
+     * @throws AuthenticationException
+     * @throws ApiException
+     */
+    public function cleanup(array $usedKeys, array $usedPrefixes = [], bool $delete = false): array
+    {
+        try {
+            $response = Http::withToken($this->apiToken)
+                ->acceptJson()
+                ->timeout($this->timeout)
+                ->post("{$this->apiUrl}/translation-projects/translations/cleanup", [
+                    'used_keys' => array_values($usedKeys),
+                    'used_prefixes' => array_values($usedPrefixes),
+                    'delete' => $delete,
+                ]);
+
+            return $this->parseResponse($response);
+        } catch (ConnectionException $e) {
+            throw new ApiException("Failed to connect to SmartPMS API: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Report (and optionally insert) translation keys that appear in source
+     * code but are missing from the project's remote translations.
+     *
+     * @param  string[]  $usedKeys
+     * @param  string[]  $usedPrefixes
+     *
+     * @throws AuthenticationException
+     * @throws ApiException
+     */
+    public function discoverMissing(array $usedKeys, array $usedPrefixes = [], bool $insert = false): array
+    {
+        try {
+            $response = Http::withToken($this->apiToken)
+                ->acceptJson()
+                ->timeout($this->timeout)
+                ->post("{$this->apiUrl}/translation-projects/translations/discover", [
+                    'used_keys' => array_values($usedKeys),
+                    'used_prefixes' => array_values($usedPrefixes),
+                    'insert' => $insert,
+                ]);
+
+            return $this->parseResponse($response);
+        } catch (ConnectionException $e) {
+            throw new ApiException("Failed to connect to SmartPMS API: {$e->getMessage()}");
+        }
+    }
+
+    /**
      * Check if API token is valid
      */
     public function testConnection(): bool
