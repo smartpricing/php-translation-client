@@ -162,9 +162,40 @@ class PullTranslationsCommand extends Command
                     continue;
                 }
 
+                // Language and filename come straight from the (potentially
+                // compromised / MITM'd) translation server and are used to build
+                // a filesystem path. Reject anything that is not a single, safe
+                // path segment so a malicious response cannot write PHP files
+                // outside the lang/ directory (path traversal / absolute paths).
+                if (! $this->isSafeSegment($language) || ! $this->isSafeSegment($filename)) {
+                    $this->warn("Skipping unsafe language/filename from server: {$language}/{$filename}");
+
+                    continue;
+                }
+
                 $this->saveFile($language, $filename, $translations, $format, $outputDir);
             }
         }
+    }
+
+    /**
+     * A safe path segment is a single non-empty component with no directory
+     * separators, no "." / ".." traversal and no NUL byte. Laravel language
+     * directories and translation file names are always single segments
+     * (e.g. "en", "auth"), so this rejects only hostile input.
+     */
+    protected function isSafeSegment(string $segment): bool
+    {
+        if ($segment === '' || $segment === '.' || $segment === '..') {
+            return false;
+        }
+
+        if (str_contains($segment, "\0")) {
+            return false;
+        }
+
+        // Any slash/backslash means it is not a single segment.
+        return preg_match('#[/\\\\]#', $segment) !== 1;
     }
 
     protected function saveFile(
@@ -182,6 +213,14 @@ class PullTranslationsCommand extends Command
         if ($this->option('dry-run')) {
             $this->line("Would create: {$filePath}");
         } else {
+            // Defence in depth: even after per-segment validation, make sure the
+            // resolved target really lives under the configured output dir.
+            if (! $this->isWithinBase($outputDir, $filePath)) {
+                $this->warn("Refusing to write outside the output directory: {$filePath}");
+
+                return;
+            }
+
             File::ensureDirectoryExists($langDir);
 
             if (! $isJson && File::exists($filePath)) {
@@ -201,59 +240,64 @@ class PullTranslationsCommand extends Command
     }
 
     /**
-     * Merge server translations into an existing PHP file,
-     * preserving comments, constants, and key ordering.
+     * Return true when $target, resolved lexically, stays inside $base.
      *
-     * Iterates the resolved local array in order so that replacements
-     * follow the same sequence as lines in the file, preventing
-     * mismatches when multiple keys share the same value.
+     * Neither path needs to exist yet, so we normalise "." / ".." segments
+     * ourselves instead of relying on realpath().
+     */
+    protected function isWithinBase(string $base, string $target): bool
+    {
+        $normalize = static function (string $path): string {
+            $isAbsolute = str_starts_with($path, '/');
+            $out = [];
+            foreach (explode('/', str_replace('\\', '/', $path)) as $part) {
+                if ($part === '' || $part === '.') {
+                    continue;
+                }
+                if ($part === '..') {
+                    array_pop($out);
+
+                    continue;
+                }
+                $out[] = $part;
+            }
+
+            return ($isAbsolute ? '/' : '') . implode('/', $out);
+        };
+
+        $base = rtrim($normalize($base), '/');
+        $target = $normalize($target);
+
+        return $target === $base || str_starts_with($target, $base . '/');
+    }
+
+    /**
+     * Merge server translations into an existing PHP file.
+     *
+     * The previous implementation rewrote the raw file text with preg_replace()
+     * and a replacement string built from the server value; preg_replace()
+     * interprets back-reference tokens ($0/$1/\1) inside that value, which let
+     * a compromised server (or a MITM on the plaintext default URL) corrupt or
+     * inject into the generated PHP. We now build the merged data as a plain
+     * array and re-render it with var_export(), which escapes every value, so
+     * no server-controlled byte ever reaches the file unescaped.
+     *
+     * Trade-off: inline comments and PHP constants in the existing file are not
+     * preserved (constants are resolved to their values by include). This is an
+     * acceptable and deliberate change for translation string files.
      */
     protected function mergePhpFile(string $filePath, array $serverTranslations): string
     {
-        $rawContent = File::get($filePath);
-
         $resolved = include $filePath;
         if (! is_array($resolved)) {
             return $this->generatePhpContent($serverTranslations);
         }
 
-        $existingDotted = Arr::dot($resolved);
+        // Local (existing) values first, server values win. Server keys are in
+        // dot-notation, matching Arr::dot() of the resolved local array.
+        $merged = array_merge(Arr::dot($resolved), $serverTranslations);
 
-        // Update changed values in raw content — iterate local keys in order
-        foreach ($existingDotted as $dottedKey => $oldValue) {
-            if (! isset($serverTranslations[$dottedKey])) {
-                continue; // Key not on server, leave untouched
-            }
-
-            $newValue = $serverTranslations[$dottedKey];
-            if ($oldValue === $newValue) {
-                continue;
-            }
-
-            $escapedOld = preg_quote(var_export($oldValue, true), '/');
-            $pattern = '/(=>\s*)' . $escapedOld . '/';
-            $replacement = '${1}' . var_export($newValue, true);
-            $rawContent = preg_replace($pattern, $replacement, $rawContent, 1);
-        }
-
-        // Append new keys not in local file
-        $newKeys = array_diff_key($serverTranslations, $existingDotted);
-        if (! empty($newKeys)) {
-            $additions = [];
-            foreach ($newKeys as $key => $value) {
-                $exportedKey = var_export($key, true);
-                $exportedValue = var_export($value, true);
-                $additions[] = "    {$exportedKey} => {$exportedValue},";
-            }
-
-            $rawContent = preg_replace(
-                '/(\n\];)\s*$/',
-                "\n" . implode("\n", $additions) . '$1',
-                $rawContent
-            );
-        }
-
-        return $rawContent;
+        return $this->generatePhpContent($merged);
     }
 
     protected function generatePhpContent(array $data): string

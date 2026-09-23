@@ -37,15 +37,22 @@ trait ResolvesScanConfig
 
         $server = $client->fetchProjectConfig() ?? [];
 
-        $serverDirs = $this->normalizeList($server['scan_dirs'] ?? null);
-        $serverExts = $this->normalizeList($server['scan_extensions'] ?? null, normalizeExtension: true);
+        // SECURITY: scan_dirs and scan_extensions decide WHICH files on the
+        // developer's machine get read (and whose matched contents are sent back
+        // to the server). We therefore never take those two from the server —
+        // only from local config or the package defaults. The regex patterns
+        // may still be shared from the server (that is the feature's point).
         $serverKeyPattern = $this->normalizeString($server['scan_key_pattern'] ?? null);
         $serverPrefixPattern = $this->normalizeString($server['scan_prefix_pattern'] ?? null);
 
-        [$dirs, $dirsSource] = $this->pick($localDirs, $serverDirs, config('translation-client.default_scan_dirs'));
-        [$exts, $extsSource] = $this->pick($localExts, $serverExts, config('translation-client.default_scan_extensions'));
+        [$dirs, $dirsSource] = $this->pick($localDirs, null, config('translation-client.default_scan_dirs'));
+        [$exts, $extsSource] = $this->pick($localExts, null, config('translation-client.default_scan_extensions'));
         [$keyPattern, $keySource] = $this->pick($localKeyPattern, $serverKeyPattern, config('translation-client.default_key_pattern'));
         [$prefixPattern, $prefixSource] = $this->pick($localPrefixPattern, $serverPrefixPattern, config('translation-client.default_prefix_pattern'));
+
+        // Confine every scan directory to the application base path so a stray
+        // absolute or traversing path cannot walk the wider filesystem.
+        $dirs = $this->confineToBase($dirs);
 
         return [
             'scan_dirs' => $dirs,
@@ -106,6 +113,49 @@ trait ResolvesScanConfig
         ), fn ($v) => $v !== ''));
 
         return $items === [] ? null : $items;
+    }
+
+    /**
+     * Keep only scan directories that resolve inside the application base path.
+     *
+     * @param  mixed  $dirs
+     * @return string[]
+     */
+    private function confineToBase(mixed $dirs): array
+    {
+        if (! is_array($dirs)) {
+            return [];
+        }
+
+        $base = realpath(base_path());
+        if ($base === false) {
+            return array_values($dirs);
+        }
+
+        $safe = [];
+        foreach ($dirs as $dir) {
+            // Resolve relative dirs against the app base, absolute ones as-is.
+            $candidate = str_starts_with((string) $dir, '/') ? (string) $dir : $base . '/' . ltrim((string) $dir, '/');
+            $real = realpath($candidate);
+
+            if ($real === false) {
+                // Not existing yet — keep the original relative value; the
+                // scanner's own realpath() check will drop it if it is invalid.
+                if (! str_starts_with((string) $dir, '/') && ! str_contains((string) $dir, '..')) {
+                    $safe[] = $dir;
+                }
+
+                continue;
+            }
+
+            if ($real === $base || str_starts_with($real, $base . DIRECTORY_SEPARATOR)) {
+                $safe[] = $dir;
+            } else {
+                $this->warn("Ignoring scan_dir outside the application: {$dir}");
+            }
+        }
+
+        return $safe;
     }
 
     private function normalizeString(mixed $raw): ?string
