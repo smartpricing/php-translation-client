@@ -4,10 +4,11 @@ namespace Smartness\TranslationClient\Tests\Unit;
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use PHPUnit\Framework\TestCase;
 use Smartness\TranslationClient\Exceptions\ApiException;
 use Smartness\TranslationClient\Exceptions\AuthenticationException;
 use Smartness\TranslationClient\TranslationClient;
+
+use Smartness\TranslationClient\Tests\TestCase;
 
 class TranslationClientTest extends TestCase
 {
@@ -53,7 +54,7 @@ class TranslationClientTest extends TestCase
         $response = $this->client->push($translations);
 
         Http::assertSent(function (Request $request) {
-            return $request->url() === 'https://api.example.com/translation-projects/import'
+            return $request->url() === 'https://api.example.com/translation-projects/translations'
                 && $request->hasHeader('Authorization', 'Bearer test-token')
                 && $request->method() === 'POST';
         });
@@ -89,7 +90,7 @@ class TranslationClientTest extends TestCase
         Http::assertSent(function (Request $request) {
             $body = $request->data();
 
-            return $request->url() === 'https://api.example.com/translation-projects/import'
+            return $request->url() === 'https://api.example.com/translation-projects/translations'
                 && $body['language'] === 'en'
                 && $body['overwrite'] === true
                 && isset($body['translations']);
@@ -124,7 +125,7 @@ class TranslationClientTest extends TestCase
         Http::assertSent(function (Request $request) {
             $body = $request->data();
 
-            return $request->url() === 'https://api.example.com/translation-projects/import'
+            return $request->url() === 'https://api.example.com/translation-projects/translations'
                 && $body['language'] === 'en'
                 && $body['filename'] === 'auth'
                 && isset($body['translations']['en']['auth']);

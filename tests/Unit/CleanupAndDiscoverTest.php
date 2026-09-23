@@ -4,8 +4,8 @@ namespace Smartness\TranslationClient\Tests\Unit;
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use PHPUnit\Framework\TestCase;
 use Smartness\TranslationClient\TranslationClient;
+use Smartness\TranslationClient\Tests\TestCase;
 
 class CleanupAndDiscoverTest extends TestCase
 {
