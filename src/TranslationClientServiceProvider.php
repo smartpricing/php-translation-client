@@ -20,7 +20,8 @@ class TranslationClientServiceProvider extends ServiceProvider
         $this->app->singleton(TranslationClient::class, function ($app) {
             return new TranslationClient(
                 config('translation-client.api_url'),
-                config('translation-client.api_token')
+                config('translation-client.api_token'),
+                (int) config('translation-client.timeout', 30)
             );
         });
     }

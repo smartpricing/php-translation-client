@@ -3,6 +3,7 @@
 namespace Smartness\TranslationClient;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Smartness\TranslationClient\Exceptions\ApiException;
@@ -10,6 +11,9 @@ use Smartness\TranslationClient\Exceptions\AuthenticationException;
 
 class TranslationClient
 {
+    /** Seconds to wait for the TCP/TLS connection to be established. */
+    protected int $connectTimeout = 10;
+
     protected string $apiUrl;
 
     public function __construct(
@@ -21,6 +25,24 @@ class TranslationClient
     }
 
     /**
+     * Build a pre-configured HTTP client for every call to the translation
+     * server. Centralises the security-relevant transport options:
+     *  - bearer token auth,
+     *  - an overall request timeout AND a connect timeout (so a black-holed
+     *    server cannot hang the artisan command indefinitely),
+     *  - explicit TLS certificate verification (never disabled, even if the
+     *    host application flipped a global Guzzle default).
+     */
+    protected function http(): PendingRequest
+    {
+        return Http::withToken($this->apiToken)
+            ->acceptJson()
+            ->timeout($this->timeout)
+            ->connectTimeout($this->connectTimeout)
+            ->withOptions(['verify' => true]);
+    }
+
+    /**
      * @param  array{format?: string, language?: string, status?: string, missing?: bool, filename?: string}  $options
      *
      * @throws AuthenticationException
@@ -29,9 +51,7 @@ class TranslationClient
     public function fetch(array $options = []): array
     {
         try {
-            $response = Http::withToken($this->apiToken)
-                ->acceptJson()
-                ->timeout($this->timeout)
+            $response = $this->http()
                 ->get("{$this->apiUrl}/translation-projects/translations", $options);
 
             return $this->parseResponse($response);
@@ -86,9 +106,7 @@ class TranslationClient
     public function push(array $translations, array $options = []): array
     {
         try {
-            $response = Http::withToken($this->apiToken)
-                ->acceptJson()
-                ->timeout($this->timeout)
+            $response = $this->http()
                 ->post("{$this->apiUrl}/translation-projects/translations", array_merge($options, [
                     'translations' => $translations,
                 ]));
@@ -156,9 +174,7 @@ class TranslationClient
     public function fetchProjectConfig(): ?array
     {
         try {
-            $response = Http::withToken($this->apiToken)
-                ->acceptJson()
-                ->timeout($this->timeout)
+            $response = $this->http()
                 ->get("{$this->apiUrl}/translation-projects/config");
 
             if ($response->status() === 404) {
@@ -189,9 +205,7 @@ class TranslationClient
     public function cleanup(array $usedKeys, array $usedPrefixes = [], bool $delete = false): array
     {
         try {
-            $response = Http::withToken($this->apiToken)
-                ->acceptJson()
-                ->timeout($this->timeout)
+            $response = $this->http()
                 ->post("{$this->apiUrl}/translation-projects/translations/cleanup", [
                     'used_keys' => array_values($usedKeys),
                     'used_prefixes' => array_values($usedPrefixes),
@@ -217,9 +231,7 @@ class TranslationClient
     public function discoverMissing(array $usedKeys, array $usedPrefixes = [], bool $insert = false): array
     {
         try {
-            $response = Http::withToken($this->apiToken)
-                ->acceptJson()
-                ->timeout($this->timeout)
+            $response = $this->http()
                 ->post("{$this->apiUrl}/translation-projects/translations/discover", [
                     'used_keys' => array_values($usedKeys),
                     'used_prefixes' => array_values($usedPrefixes),
