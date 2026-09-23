@@ -90,12 +90,16 @@ return [
     |--------------------------------------------------------------------------
     |
     | These settings are used by the `translations:cleanup` and
-    | `translations:missing` commands. Each may also be configured centrally on
-    | the SmartPMS project (Settings → Source-Code Scanning) — when both a
-    | local value and a server value exist, the local one wins.
+    | `translations:missing` commands.
     |
-    | Leave any value null/empty to fall back to the server config, then to the
-    | built-in defaults shown below.
+    | For security, `scan_dirs` and `scan_extensions` are resolved from LOCAL
+    | config or the package defaults ONLY — never from the server — because they
+    | decide which local files are read (and whose matched contents are sent
+    | back). The regex `scan_key_pattern` / `scan_prefix_pattern` may still be
+    | shared from the SmartPMS project config; a local value always wins.
+    |
+    | Leave any value null/empty to fall back (patterns: to the server config,
+    | then defaults; dirs/extensions: straight to the defaults shown below).
     |
     */
 

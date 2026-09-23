@@ -164,7 +164,7 @@ php artisan translations:push --dry-run --language=de
 
 These two commands scan your local source for `$t('…')`, `useTranslate('…')`, `i18n.t('…')`, `trans('…')`, `__('…')` and `@lang('…')` calls and reconcile what they find with what the server stores.
 
-Both commands first fetch the project's central scan configuration from `GET /translation-projects/config`. Local config (`config/translation-client.php` or `SMARTPMS_TRANSLATION_*` env vars) always wins; the server values are a shared default; package defaults are used if neither is set. The resolved config is printed at the start of each run so you can verify which source provided each value.
+Both commands first fetch the project's central scan configuration from `GET /translation-projects/config`. Only the **regex patterns** (`scan_key_pattern`, `scan_prefix_pattern`) can be shared from the server; **`scan_dirs` and `scan_extensions` are taken from local config or the package defaults only** (never the server), since they control which local files are read. Local config always wins. Scan directories are also confined to the application base path. The resolved config is printed at the start of each run so you can verify which source provided each value.
 
 #### `translations:missing` — Find Keys Used in Code but Absent Remotely
 
