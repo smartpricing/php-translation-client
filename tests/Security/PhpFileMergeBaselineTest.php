@@ -19,9 +19,9 @@ use Smartness\TranslationClient\Tests\TestCase;
  * This corrupts the generated PHP (and is the seed of a code-generation
  * injection when combined with the raw-content rewrite).
  *
- * The security/sast PR rebuilds the merged file from a plain array via
- * var_export (no preg_replace on server data) and REPLACES the assertions
- * below (SAST-FLIP): the merged value then equals the server value exactly.
+ * As of the security/sast fix this is a REGRESSION test: mergePhpFile rebuilds
+ * the file from a plain array via var_export (no preg_replace on server data),
+ * so the merged value equals the server value exactly and the file stays valid.
  */
 #[Group('security-baseline')]
 class PhpFileMergeBaselineTest extends TestCase
@@ -44,7 +44,7 @@ class PhpFileMergeBaselineTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_backreference_in_server_value_corrupts_merged_value(): void
+    public function test_backreference_in_server_value_is_neutralised(): void
     {
         $payload = 'a $0 b'; // contains a preg back-reference token
         Http::fake(['api.example.com/*' => Http::response([
@@ -55,13 +55,11 @@ class PhpFileMergeBaselineTest extends TestCase
         $this->artisan('translations:pull')->assertExitCode(0);
 
         $content = File::get($this->lang.'/en/messages.php');
-        // BASELINE: the back-reference $0 expands into the raw file, corrupting
-        // it so it no longer parses as PHP.
-        // SAST-FLIP: assertTrue($this->parses($content));
-        //            $merged = include $this->lang.'/en/messages.php';
-        //            assertSame($payload, $merged['greeting']);
-        $this->assertFalse($this->parses($content),
-            'BASELINE: preg_replace expands back-references from the server value, corrupting the file');
+        $this->assertTrue($this->parses($content), 'merged file must remain valid PHP');
+
+        $merged = include $this->lang.'/en/messages.php';
+        $this->assertSame($payload, $merged['greeting'],
+            'server value must be written verbatim, back-reference tokens neutralised');
     }
 
     private function parses(string $php): bool

@@ -14,6 +14,12 @@ class SourceScanner
         'coverage', 'vendor', 'storage', 'bootstrap/cache',
     ];
 
+    /** Max bytes read per file before running the (possibly server-supplied) regex. */
+    private const MAX_FILE_BYTES = 2 * 1024 * 1024;
+
+    /** Reject absurdly long patterns (a cheap ReDoS / abuse guard). */
+    private const MAX_PATTERN_LENGTH = 2000;
+
     /**
      * @param  string[]  $scanDirs
      * @param  string[]  $scanExtensions
@@ -35,7 +41,9 @@ class SourceScanner
         $prefixes = [];
 
         foreach ($files as $file) {
-            $contents = @file_get_contents($file);
+            // Bound the input fed to the regex engine to limit ReDoS blast
+            // radius from a (server-supplied) pattern against a huge file.
+            $contents = @file_get_contents($file, false, null, 0, self::MAX_FILE_BYTES);
             if ($contents === false) {
                 continue;
             }
@@ -85,7 +93,11 @@ class SourceScanner
                             return ! in_array($name, $skipDirs, true) && ! str_starts_with($name, '.');
                         }
 
-                        return true;
+                        // Never read dotfiles (e.g. .env, .env.local): they are
+                        // not source and could otherwise be scanned — and their
+                        // matched contents exfiltrated — if a server-supplied
+                        // extension happened to match.
+                        return ! str_starts_with($name, '.');
                     },
                 ),
             );
@@ -124,6 +136,10 @@ class SourceScanner
     private function matchAll(string $content, ?string $pattern): array
     {
         if ($pattern === null || $pattern === '') {
+            return [];
+        }
+
+        if (strlen($pattern) > self::MAX_PATTERN_LENGTH) {
             return [];
         }
 

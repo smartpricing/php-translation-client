@@ -17,9 +17,9 @@ use Smartness\TranslationClient\Tests\TestCase;
  * default URL) can write PHP files anywhere the process can write — outside
  * lang/ and even at an absolute path.
  *
- * These assertions describe the vulnerability. The security/sast PR fixes the
- * command to confine writes to the output dir and REPLACES the assertions
- * below with their fixed counterparts (marked "SAST-FLIP").
+ * As of the security/sast fix these are REGRESSION tests: the command
+ * validates the server-supplied language/filename as single safe path segments
+ * and refuses to write outside the output directory.
  */
 #[Group('security-baseline')]
 class PullPathTraversalBaselineTest extends TestCase
@@ -49,26 +49,23 @@ class PullPathTraversalBaselineTest extends TestCase
         ], 200)]);
     }
 
-    public function test_server_filename_escapes_lang_dir_via_dot_dot(): void
+    public function test_server_filename_traversal_is_blocked(): void
     {
         // filename "../../evil" -> lang/en/../../evil.php == base/evil.php
         $this->fake(['../../evil' => ['x' => ['en' => 'pwned']]]);
         $this->artisan('translations:pull')->assertExitCode(0);
 
         $escaped = $this->base.'/evil.php';
-        // SAST-FLIP: after the fix this becomes assertFileDoesNotExist($escaped)
-        $this->assertFileExists($escaped, 'BASELINE: traversal via filename writes outside lang/');
+        $this->assertFileDoesNotExist($escaped, 'traversal via filename must not write outside lang/');
     }
 
-    public function test_server_language_escapes_lang_dir_via_dot_dot(): void
+    public function test_server_language_traversal_is_blocked(): void
     {
         // language "../../.." -> lang/../../../auth.php
         $this->fake(['auth' => ['x' => ['../../..' => 'pwned']]]);
         $this->artisan('translations:pull')->assertExitCode(0);
 
         $escaped = dirname($this->lang, 3).'/auth.php';
-        // SAST-FLIP: after the fix this becomes assertFileDoesNotExist($escaped)
-        $this->assertFileExists($escaped, 'BASELINE: traversal via language writes outside lang/');
-        @unlink($escaped);
+        $this->assertFileDoesNotExist($escaped, 'traversal via language must not write outside lang/');
     }
 }

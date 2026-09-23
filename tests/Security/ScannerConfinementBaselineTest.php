@@ -60,13 +60,12 @@ class ScannerConfinementBaselineTest extends TestCase
         return "(?:^|[^\\w\$])(?:\\\$?t|trans|__|@lang)\\s*\\(\\s*['\"`]([^'\"`\\n\\r]+?)['\"`]";
     }
 
-    public function test_dotfile_is_scanned_when_extension_matches(): void
+    public function test_dotfile_is_not_scanned(): void
     {
         // A ".env"-style file whose contents look like a translation call.
         file_put_contents($this->root.'/.env', "__('SECRET_TOKEN_abc123')");
         $scanner = new SourceScanner([$this->root], ['env'], $this->keyPattern(), null);
         $keys = $scanner->scan()['keys'];
-        // SAST-FLIP: assertNotContains('SECRET_TOKEN_abc123', $keys);
-        $this->assertContains('SECRET_TOKEN_abc123', $keys, 'BASELINE: dotfiles are read by the scanner');
+        $this->assertNotContains('SECRET_TOKEN_abc123', $keys, 'dotfiles must not be read by the scanner');
     }
 }
